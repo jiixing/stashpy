@@ -141,8 +141,11 @@ class MainHandlerTests(unittest.TestCase):
             processor_spec={'to_dict': [SAMPLE_PARSE]}))
         processor = main.load_processor()
         self.assertIsInstance(processor, LineProcessor)
-        self.assertDictEqual(processor.parse_line("My name is Julia and I'm 5 years old."),
-                             dict(name='Julia', age=5))
+        line = "My name is Julia and I'm 5 years old."
+        doc = processor.for_line(line)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(
+            doc, {'message': line, 'name': 'Julia', 'age': 5, '@version': 1})
 
 
     def test_custom_handler_with_specs(self):
@@ -151,8 +154,11 @@ class MainHandlerTests(unittest.TestCase):
             processor_class='stashpy.tests.unit.test_process_line.KitaHandlerTwo'))
         processor = main.load_processor()
         self.assertIsInstance(processor, KitaHandlerTwo)
-        self.assertDictEqual(processor.parse_line("My name is Juergen and I'm 4 years old."),
-                             dict(name='Juergen', age=4))
+        line = "My name is Juergen and I'm 4 years old."
+        doc = processor.for_line(line)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(
+            doc, {'name': 'Juergen', 'age': 4, '@version': 1, 'message': line})
 
     def test_no_indexer(self):
         main = stashpy.handler.MainHandler(dict(
