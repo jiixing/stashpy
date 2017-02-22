@@ -82,7 +82,7 @@ class ConnectionHandler:
         logger.info("Connection to %s closed", self.address)
         yield []
 
-class MockIndexer:
+class NullIndexer:
     def index(self, doc):
         pass
 
@@ -112,7 +112,7 @@ class MainHandler(tornado.tcpserver.TCPServer):
     @gen.coroutine
     def handle_stream(self, stream, address):
         if self.es_config is None:
-            indexer = MockIndexer()
+            indexer = NullIndexer()
         else:
             indexer = ESIndexer(**self.es_config)
         cn = ConnectionHandler(stream, address,
