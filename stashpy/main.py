@@ -36,6 +36,7 @@ class RabbitApp:
     def run(self):
         from kombu import Connection
         with Connection(self.config['queue_config']['url']) as conn:
+            simple_queue = conn.SimpleQueue('simple_queue')
             message = simple_queue.get(block=True, timeout=1)
             message.ack()
             simple_queue.close()
