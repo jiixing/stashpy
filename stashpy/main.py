@@ -5,6 +5,11 @@ import logging.config
 
 import tornado.ioloop
 import yaml
+try:
+    import kombu
+    import kombu.mixins
+except ImportError:
+    pass
 
 from .handler import MainHandler
 from stashpy import constants
@@ -28,21 +33,42 @@ class TornadoApp:
             io_loop.start()
 
 
+class MessageConsumer(kombu.mixins.ConsumerMixin):
+
+    def __init__(self, connection, queue_name, exchange):
+        self.connection = connection
+        self.task_queue = kombu.Queue(queue_name,
+                                      kombu.Exchange(exchange), '')
+
+    def get_consumers(self, Consumer, channel):
+        return [Consumer(queues=[self.task_queue],
+                         callbacks=[self.on_task])]
+
+    def on_task(self, body, message):
+        #TODO here is where the magic happes
+        logger.info('Processing new message on queue %s: body %s // payload %s',
+                    self.task_queue.name,
+                    body,
+                    message.payload)
+        message.ack()
+
+
 class RabbitApp:
 
     def __init__(self, config):
         self.config = config
+        connection = kombu.Connection(self.config['queue_config']['url'])
+        self.consumer = MessageConsumer(
+            connection,
+            self.config['queue_config']['queuename'],
+            self.config['queue_config']['exchange'])
 
     def run(self):
-        from kombu import Connection
-        with Connection(self.config['queue_config']['url']) as conn:
-            logger.info("Stashpy started, listening to messages on {}:{}".format(
-                self.config['queue_config']['url'],
-                self.config['queue_config']['queuename']))
-            simple_queue = conn.SimpleQueue('simple_queue')
-            message = simple_queue.get(block=True, timeout=1)
-            message.ack()
-            simple_queue.close()
+        logger.info("Stashpy started, listening to messages on {}:{}".format(
+            self.config['queue_config']['url'],
+            self.config['queue_config']['queuename']))
+        self.consumer.run()
+
 
 CONFIG_ERR_MSG = 'Either one of tcp_config or queue_config are allowed'
 
