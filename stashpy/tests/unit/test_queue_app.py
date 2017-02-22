@@ -21,7 +21,7 @@ class QueueAppTests(unittest.TestCase):
         config = {'queue_config': {'url': 'amqp://thequeueurl',
                                    'queuename': 'aq',
                                    'exchange': 'logging'}}
-        app = RabbitApp(config)
+        app = RabbitApp(None, config)
         self.assertEqual(mock_consumer.call_count, 1)
         mock_consumer.assert_called_once_with(
             mock_connection.return_value,

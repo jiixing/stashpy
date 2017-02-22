@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import logging.config
+import importlib
 
 import tornado.ioloop
 import yaml
@@ -13,14 +14,15 @@ except ImportError:
 
 from .handler import MainHandler
 from stashpy import constants
+from .processor import LineProcessor
 
 logger = logging.getLogger(__name__)
 
 
 class TornadoApp:
-    def __init__(self, config):
+    def __init__(self, line_processor, config):
         self.config = config
-        self.main = MainHandler(config)
+        self.main = MainHandler(line_processor, config)
 
     def run(self):
         port = self.config.get('port', constants.DEFAULT_PORT)
@@ -55,8 +57,9 @@ class MessageConsumer(kombu.mixins.ConsumerMixin):
 
 class RabbitApp:
 
-    def __init__(self, config):
+    def __init__(self, line_processor, config):
         self.config = config
+        self.line_processor = line_processor
         connection = kombu.Connection(self.config['queue_config']['url'])
         self.consumer = MessageConsumer(
             connection,
@@ -69,6 +72,17 @@ class RabbitApp:
             self.config['queue_config']['queuename']))
         self.consumer.run()
 
+def load_processor(config):
+    if 'processor_spec' in config:
+        line_processor = LineProcessor(config['processor_spec'])
+    elif 'processor_class' in config:
+        module_name,class_name = config['processor_class'].rsplit('.', 1)
+        module = importlib.import_module(module_name)
+        _class = getattr(module, class_name)
+        line_processor = _class()
+    else:
+        raise ValueError("One of processor_spec or processor_class must be specified")
+    return line_processor
 
 CONFIG_ERR_MSG = 'Either one of tcp_config or queue_config are allowed'
 
@@ -88,9 +102,11 @@ def run():
         assert 'tcp_config' not in config, CONFIG_ERR_MSG
     else:
         assert False, CONFIG_ERR_MSG
+    line_processor = load_processor(config)
     logging.config.dictConfig(config.pop('logging', constants.DEFAULT_LOGGING))
     try:
-        app = TornadoApp(config) if 'tcp_config' in config else RabbitApp(config)
+        app_class = TornadoApp if 'tcp_config' in config else RabbitApp
+        app = app_class(line_processor, config)
         app.run()
     except:
         logging.exception('Exception: ')
