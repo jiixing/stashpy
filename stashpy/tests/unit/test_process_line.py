@@ -75,7 +75,6 @@ class LineProcessorTests(unittest.TestCase):
         processor = LineProcessor(SPEC)
         line = "I'm not talking to you"
         doc = processor.for_line(line)
-        self.assertTrue('@timestamp' in doc)
         self.assertTrue(just_now(doc.pop('@timestamp')))
         self.assertDictEqual(doc, {'message': line, '@version': 1})
 
@@ -83,15 +82,21 @@ class LineProcessorTests(unittest.TestCase):
     def test_formatted(self):
         SPEC = {'to_format': {SAMPLE_PARSE: dict(name_and_age="{name}_{age:d}")}}
         processor = LineProcessor(SPEC)
-        formatted = processor.parse_line("My name is Jacob and I'm 3 years old.")
-        self.assertDictEqual(formatted, {'name_and_age':'Jacob_3'})
+        line = "My name is Jacob and I'm 3 years old."
+        doc = processor.for_line(line)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(
+            doc, {'message': line, '@version': 1, 'name_and_age': 'Jacob_3'})
 
 
     def test_regexp(self):
         SPEC = {'to_dict':["My name is (?P<name>\w*) and I'm (?P<age>\d*) years old."]}
         processor = LineProcessor(SPEC)
-        dicted = processor.parse_line("My name is Valerian and I'm 3 years old.")
-        self.assertDictEqual(dicted, {'name': 'Valerian', 'age': '3'})
+        line = "My name is Valerian and I'm 3 years old."
+        doc = processor.for_line(line)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(
+            doc, {'message': line, '@version': 1, 'name': 'Valerian', 'age': '3'})
 
 
 class MockStream:
