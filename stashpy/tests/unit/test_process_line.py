@@ -1,6 +1,8 @@
 import unittest
+from datetime import datetime, timedelta
 from tornado.testing import AsyncTestCase, gen_test
 from tornado import gen
+import pytz
 
 import stashpy.handler
 from stashpy.processor import LineProcessor, FormatSpec
@@ -10,6 +12,12 @@ from .common import TimeStampedMixin
 SAMPLE_PARSE = "My name is {name} and I'm {age:d} years old."
 SAMPLE_REGEXP = "My name is (?P<name>\w*) and I'm (?P<age>\d*) years old\."
 SAMPLE_GROK = "My name is %{USERNAME:name} and I'm %{INT:age:int} years old\."
+
+def just_now(point: str):
+    pointtime = datetime.strptime(point, "%Y-%m-%dT%H:%M:%S.%f+00:00")
+    pointtime = pointtime.replace(tzinfo=pytz.utc)
+    now = datetime.utcnow().replace(tzinfo=pytz.utc)
+    return (now - pointtime) < timedelta(seconds=1)
 
 class NamedReTests(unittest.TestCase):
 
@@ -55,32 +63,40 @@ class LineProcessorTests(unittest.TestCase):
     def test_to_dict(self):
         SPEC = {'to_dict':[SAMPLE_PARSE]}
         processor = LineProcessor(SPEC)
-        dicted = processor.for_line("My name is Valerian and I'm 3 years old.")
-        self.assertDictEqual(dicted, {'name': 'Valerian', 'age': 3})
+        msg = "My name is Valerian and I'm 3 years old."
+        doc = processor.for_line(msg)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(
+            doc, {'name': 'Valerian', 'age': 3, '@version': 1, 'message': msg})
 
 
-    def test_none_on_no_match(self):
+    def test_no_match(self):
         SPEC = {'to_dict':[SAMPLE_PARSE]}
         processor = LineProcessor(SPEC)
-        dicted = processor.for_line("I'm not talking to you")
-        self.assertIsNone(dicted)
+        line = "I'm not talking to you"
+        doc = processor.for_line(line)
+        self.assertTrue('@timestamp' in doc)
+        self.assertTrue(just_now(doc.pop('@timestamp')))
+        self.assertDictEqual(doc, {'message': line, '@version': 1})
 
 
     def test_formatted(self):
         SPEC = {'to_format': {SAMPLE_PARSE: dict(name_and_age="{name}_{age:d}")}}
         processor = LineProcessor(SPEC)
-        formatted = processor.for_line("My name is Jacob and I'm 3 years old.")
+        formatted = processor.parse_line("My name is Jacob and I'm 3 years old.")
         self.assertDictEqual(formatted, {'name_and_age':'Jacob_3'})
 
 
     def test_regexp(self):
         SPEC = {'to_dict':["My name is (?P<name>\w*) and I'm (?P<age>\d*) years old."]}
         processor = LineProcessor(SPEC)
-        dicted = processor.for_line("My name is Valerian and I'm 3 years old.")
+        dicted = processor.parse_line("My name is Valerian and I'm 3 years old.")
         self.assertDictEqual(dicted, {'name': 'Valerian', 'age': '3'})
 
+
 class MockStream:
-    def set_close_callback(*args, **kwargs): pass
+    def set_close_callback(*args, **kwargs):
+        pass
 
 class MockIndexer:
     @gen.coroutine
@@ -89,20 +105,6 @@ class MockIndexer:
             self.indexed = []
         self.indexed.append(doc)
         return doc
-
-class ConnectionHandlerTests(AsyncTestCase, TimeStampedMixin):
-
-    @gen_test
-    def test_no_parse(self):
-        SPEC = {'to_dict':[SAMPLE_PARSE]}
-        processor = LineProcessor(SPEC)
-        indexer = MockIndexer()
-        handler = stashpy.handler.ConnectionHandler(MockStream(), None, indexer, processor)
-        resp = yield handler.process_line(b"A random line")
-        self.assertEqual(len(indexer.indexed), 1)
-        self.assertDictEqualWithTimestamp(
-            indexer.indexed[0],
-            {'message': 'A random line', '@version': 1})
 
 
 class KitaHandler(LineProcessor):
@@ -134,7 +136,7 @@ class MainHandlerTests(unittest.TestCase):
             processor_spec={'to_dict': [SAMPLE_PARSE]}))
         processor = main.load_processor()
         self.assertIsInstance(processor, LineProcessor)
-        self.assertDictEqual(processor.for_line("My name is Julia and I'm 5 years old."),
+        self.assertDictEqual(processor.parse_line("My name is Julia and I'm 5 years old."),
                              dict(name='Julia', age=5))
 
 
@@ -144,7 +146,7 @@ class MainHandlerTests(unittest.TestCase):
             processor_class='stashpy.tests.unit.test_process_line.KitaHandlerTwo'))
         processor = main.load_processor()
         self.assertIsInstance(processor, KitaHandlerTwo)
-        self.assertDictEqual(processor.for_line("My name is Juergen and I'm 4 years old."),
+        self.assertDictEqual(processor.parse_line("My name is Juergen and I'm 4 years old."),
                              dict(name='Juergen', age=4))
 
     def test_no_indexer(self):

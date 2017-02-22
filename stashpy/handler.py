@@ -1,7 +1,5 @@
 import importlib
 import logging
-from datetime import datetime
-import pytz
 
 from tornado import gen
 import tornado.tcpserver
@@ -53,28 +51,9 @@ class ConnectionHandler:
         try:
             while True:
                 line = yield self.stream.read_until(b"\n")
-                yield self.process_line(line)
+                yield self.indexer.index(self.line_processor.for_line(line))
         except tornado.iostream.StreamClosedError:
             pass
-
-    @gen.coroutine
-    def process_line(self, line):
-        line = line.decode('utf-8').rstrip('\n')
-        logger.debug("New line: %s", line)
-        result = self.line_processor.for_line(line)
-        if result is None:
-            logger.debug("Line not parsed, storing whole message")
-            result = {'message': line, '@version': 1}
-            self.unparsed_counter.inc()
-        else:
-            logger.debug("Match: %s", str(result))
-            result['message'] = line
-            result['@version'] = 1
-            self.parsed_counter.inc()
-        if '@timestamp' not in result:
-            result['@timestamp'] = datetime.utcnow().replace(tzinfo=pytz.utc).isoformat()
-        yield self.indexer.index(result)
-
 
     @gen.coroutine
     def on_close(self):

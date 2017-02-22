@@ -2,6 +2,8 @@ import sys
 import json
 import logging
 import copy
+from datetime import datetime
+import pytz
 
 from .pattern_matching import LineParser
 
@@ -61,7 +63,7 @@ class LineProcessor:
                 return formatted
         return None
 
-    def for_line(self, line):
+    def parse_line(self, line):
         dict_result = self.do_dict_specs(line)
         if dict_result:
             return dict_result
@@ -69,3 +71,21 @@ class LineProcessor:
         if format_result:
             return format_result
         return None
+
+    def for_line(self, line):
+        if isinstance(line, bytes):
+            line = line.decode('utf-8').rstrip('\n')
+        logger.debug("New line: %s", line)
+        parsed = self.parse_line(line)
+        if parsed is None:
+            logger.debug("Line not parsed, storing whole message")
+            parsed = {'message': line, '@version': 1}
+            #TODO self.unparsed_counter.inc()
+        else:
+            logger.debug("Match: %s", str(parsed))
+            parsed['message'] = line
+            parsed['@version'] = 1
+            #TODO self.parsed_counter.inc()
+        if '@timestamp' not in parsed:
+            parsed['@timestamp'] = datetime.utcnow().replace(tzinfo=pytz.utc).isoformat()
+        return parsed
