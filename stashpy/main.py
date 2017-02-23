@@ -55,7 +55,7 @@ class MessageConsumer(kombu.mixins.ConsumerMixin):
                     body,
                     message.payload)
         #TODO: why is this a list?
-        doc = self.line_processor.for_line(message.payload[0])
+        doc = self.line_processor.for_line(message.payload)
         self.es_indexer.index(doc)
         message.ack()
 

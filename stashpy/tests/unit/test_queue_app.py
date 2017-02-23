@@ -53,7 +53,7 @@ class QueueAppTests(unittest.TestCase):
         line_processor = mock.MagicMock()
         consumer = MessageConsumer(mock.MagicMock(), line_processor,
                                    indexer, 'aq', 'logging')
-        message = MessageStub(payload=['I am a string, yo'])
+        message = MessageStub(payload='I am a string, yo')
         consumer.on_task(None, message)
         self.assertTrue(message.acked)
         line_processor.for_line.assert_called_once_with('I am a string, yo')

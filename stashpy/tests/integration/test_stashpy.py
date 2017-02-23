@@ -122,7 +122,7 @@ class StashpyQueueAppTests(unittest.TestCase):
     @mock.patch('stashpy.main.MessageConsumer', new=ReplacementMessageConsumer)
     def test_indexing_line(self):
         self.delete_existing()
-        line = "My name is Pieter Hintjens and I'm 36 years old.",
+        line = "My name is Pieter Hintjens and I'm 36 years old."
         self.queue_message(line)
         app = stashpy.main.RabbitApp(stashpy.main.load_processor(QUEUE_CONFIG), QUEUE_CONFIG)
         app.run()
