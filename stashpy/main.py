@@ -37,8 +37,9 @@ class TornadoApp:
 
 class MessageConsumer(kombu.mixins.ConsumerMixin):
 
-    def __init__(self, connection, queue_name, exchange):
+    def __init__(self, connection, line_processor, queue_name, exchange):
         self.connection = connection
+        self.line_processor = line_processor
         self.task_queue = kombu.Queue(queue_name,
                                       kombu.Exchange(exchange), '')
 
@@ -47,7 +48,6 @@ class MessageConsumer(kombu.mixins.ConsumerMixin):
                          callbacks=[self.on_task])]
 
     def on_task(self, body, message):
-        #TODO here is where the magic happes
         logger.info('Processing new message on queue %s: body %s // payload %s',
                     self.task_queue.name,
                     body,
@@ -59,10 +59,10 @@ class RabbitApp:
 
     def __init__(self, line_processor, config):
         self.config = config
-        self.line_processor = line_processor
         connection = kombu.Connection(self.config['queue_config']['url'])
         self.consumer = MessageConsumer(
             connection,
+            line_processor,
             self.config['queue_config']['queuename'],
             self.config['queue_config']['exchange'])
 

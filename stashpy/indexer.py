@@ -58,26 +58,42 @@ INDEX_TEMPLATE = {
 }
 
 
-class ESIndexer:
+class ESIndexerBase:
 
     def __init__(self, host, port, index_pattern=DEFAULT_INDEX_PATTERN, doc_type='doc'):
         self.base_url = 'http://{}:{}'.format(host.rstrip('/'), port)
-        self.client = tornado.httpclient.AsyncHTTPClient()
         self.index_pattern = index_pattern
+        self.index_template_list_url = self.base_url + "/_template/"
+        self.index_template_url = self.base_url + "/_template/{}/".format(TEMPLATE_NAME)
         self.doc_type = doc_type
-        self._check_template()
+        self.check_template()
+
+    def check_template(self):
+        raise NotImplemented()
+
+class SyncIndexer(ESIndexerBase):
+
+    pass
+
+class TornadoIndexer(ESIndexerBase):
+
+    @property
+    def client(self):
+        if not hasattr(self, '_client'):
+            self._client = tornado.httpclient.AsyncHTTPClient()
+        return self._client
 
     @gen.coroutine
-    def _check_template(self):
-        #see whether there is a template
-        url = self.base_url + "/_template/"
-        request = tornado.httpclient.HTTPRequest(url, method='GET', headers=None)
+    def check_template(self):
+        request = tornado.httpclient.HTTPRequest(self.index_template_list_url,
+                                                 method='GET', headers=None)
         response = yield self.client.fetch(request)
         templates = json.loads(response.body.decode('utf-8'))
         if 'stashpy_template' in templates:
             return
-        url = self.base_url + "/_template/{}/".format(TEMPLATE_NAME)
-        request = tornado.httpclient.HTTPRequest(url, method='PUT', headers=None, body=json.dumps(INDEX_TEMPLATE))
+        #see whether there is a template
+        request = tornado.httpclient.HTTPRequest(
+            self.index_template_url, method='PUT', headers=None, body=json.dumps(INDEX_TEMPLATE))
         response = yield self.client.fetch(request)
         ack = json.loads(response.body.decode('utf-8'))
         #TODO check ack

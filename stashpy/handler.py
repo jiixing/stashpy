@@ -3,7 +3,7 @@ import logging
 from tornado import gen
 import tornado.tcpserver
 
-from .indexer import ESIndexer
+from .indexer import TornadoIndexer as ESIndexer
 
 logger = logging.getLogger(__name__)
 

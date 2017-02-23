@@ -24,13 +24,13 @@ class QueueAppTests(unittest.TestCase):
         app = RabbitApp(None, config)
         self.assertEqual(mock_consumer.call_count, 1)
         mock_consumer.assert_called_once_with(
-            mock_connection.return_value,
+            mock_connection.return_value, None,
             'aq', 'logging')
 
 
     @mock.patch('stashpy.main.kombu')
     def test_consumer(self, mock_kombu):
-        consumer = MessageConsumer(mock.MagicMock(), 'aq', 'logging')
+        consumer = MessageConsumer(mock.MagicMock(), None, 'aq', 'logging')
         self.assertEqual(mock_kombu.Queue.call_count, 1)
         self.assertEqual(mock_kombu.Exchange.call_count, 1)
         mock_kombu.Exchange.assert_called_once_with('logging')
@@ -45,7 +45,7 @@ class QueueAppTests(unittest.TestCase):
 
     @mock.patch('stashpy.main.kombu')
     def test_consumer_on_task(self, mock_kombu):
-        consumer = MessageConsumer(mock.MagicMock(), 'aq', 'logging')
+        consumer = MessageConsumer(mock.MagicMock(), None, 'aq', 'logging')
         message = MessageStub(payload='I am a string, yo')
         consumer.on_task(None, message)
         self.assertTrue(message.acked)
