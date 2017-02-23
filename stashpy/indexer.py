@@ -5,6 +5,7 @@ import logging
 
 import tornado.httpclient
 from tornado import gen
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +72,35 @@ class ESIndexerBase:
     def check_template(self):
         raise NotImplemented()
 
+    def index(self):
+        raise NotImplemented()
+
 class SyncIndexer(ESIndexerBase):
 
-    pass
+    def check_template(self):
+        existing_templates = requests.get(self.index_template_list_url).json()
+        if 'stashpy_templates' in existing_templates:
+            return
+        resp = requests.put(self.index_template_url, json=INDEX_TEMPLATE)
+        assert resp.status_code == 200
+        ack = resp.json()
+        #TODO check ack
+
+    def index(self, doc):
+        doc_id = str(uuid4())
+        index = datetime.strftime(datetime.now(),
+                                  doc.pop('_index_', self.index_pattern))
+        if '{' in index and '}' in index:
+            index = index.format(**doc)
+        url = self.base_url + "/{}/{}/{}".format(index, self.doc_type, doc_id)
+        response = requests.post(url, json=doc)
+        if 200 <= response.status_code < 300:
+            logger.debug("Successfully indexed doc, id: %s",
+                         response.json()['_id'])
+        else:
+            logger.info("Index request returned response %d, reason: %s",
+                        response.status_code,
+                        response.json()['reason'])
 
 class TornadoIndexer(ESIndexerBase):
 

@@ -25,8 +25,9 @@ class TornadoApp:
         self.main = MainHandler(line_processor, config)
 
     def run(self):
-        port = self.config.get('port', constants.DEFAULT_PORT)
-        self.main.listen(port, address=constants.DEFAULT_ADDRESS)
+        port = self.config['tcp_config'].get('port', constants.DEFAULT_PORT)
+        address = self.config['tcp_config'].get('address', constants.DEFAULT_ADDRESS)
+        self.main.listen(port, address=address)
         logger.info("Stashpy started, accepting connections on {}:{}".format(
             'localhost',
             port))
@@ -37,9 +38,10 @@ class TornadoApp:
 
 class MessageConsumer(kombu.mixins.ConsumerMixin):
 
-    def __init__(self, connection, line_processor, queue_name, exchange):
+    def __init__(self, connection, line_processor, es_indexer, queue_name, exchange):
         self.connection = connection
         self.line_processor = line_processor
+        self.es_indexer = es_indexer
         self.task_queue = kombu.Queue(queue_name,
                                       kombu.Exchange(exchange), '')
 
@@ -52,6 +54,9 @@ class MessageConsumer(kombu.mixins.ConsumerMixin):
                     self.task_queue.name,
                     body,
                     message.payload)
+        #TODO: why is this a list?
+        doc = self.line_processor.for_line(message.payload[0])
+        self.es_indexer.index(doc)
         message.ack()
 
 
@@ -60,9 +65,17 @@ class RabbitApp:
     def __init__(self, line_processor, config):
         self.config = config
         connection = kombu.Connection(self.config['queue_config']['url'])
+        #TODO: move
+        from .indexer import SyncIndexer
+        from .handler import NullIndexer
+        if 'indexer_config' in self.config:
+            indexer = SyncIndexer(**self.config['indexer_config'])
+        else:
+            indexer = NullIndexer()
         self.consumer = MessageConsumer(
             connection,
             line_processor,
+            indexer,
             self.config['queue_config']['queuename'],
             self.config['queue_config']['exchange'])
 
