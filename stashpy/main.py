@@ -54,7 +54,6 @@ class MessageConsumer(kombu.mixins.ConsumerMixin):
                     self.task_queue.name,
                     body,
                     message.payload)
-        #TODO: why is this a list?
         doc = self.line_processor.for_line(message.payload)
         self.es_indexer.index(doc)
         message.ack()
